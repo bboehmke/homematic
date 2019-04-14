@@ -62,38 +62,38 @@ func TestFault_UnmarshalXML(t *testing.T) {
 }
 
 var valueTestData = []struct {
-	name string
-	xml string
+	name  string
+	xml   string
 	value interface{}
 }{{
 	"string",
 	"<string>test</string>",
 	"test",
-},{
+}, {
 	"string_raw",
 	"test",
 	"test",
-},{
+}, {
 	"int",
 	"<int>42</int>",
 	int32(42),
-},{
+}, {
 	"i4",
 	"<i4>42</i4>",
 	int32(42),
-},{
+}, {
 	"bool_true",
 	"<boolean>1</boolean>",
 	true,
-},{
+}, {
 	"bool_false",
 	"<boolean>0</boolean>",
 	false,
-},{
+}, {
 	"double",
 	"<double>1.2</double>",
 	float64(1.2),
-},{
+}, {
 	"array",
 	`<array>
   <data>
@@ -104,7 +104,7 @@ var valueTestData = []struct {
 	[]interface{}{
 		int32(111), int32(222),
 	},
-},{
+}, {
 	"struct",
 	`<struct>
   <member>

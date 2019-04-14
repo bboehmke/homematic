@@ -21,7 +21,7 @@ func NewClient(url string) Client {
 
 // RPC client
 type client struct {
-	Url string
+	Url    string
 	client *http.Client
 }
 

@@ -14,7 +14,6 @@ func (c testClient) Call(method string, params []interface{}) (rpc.Response, err
 	return c(method, params)
 }
 
-
 func TestBaseClient_ListMethods(t *testing.T) {
 	ass := assert.New(t)
 

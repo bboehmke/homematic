@@ -29,25 +29,25 @@ type DeviceDescription struct {
 	ParamSets []string
 
 	/*
-	RFAddress int
-	ParentType string
-	Index int
-	AESActive bool
-	Firmware string
-	AvailableFirmware string
-	Updatable bool
-	Version int
-	Flags int
-	LinkSourceRoles string
-	LinkTargetRoles string
-	Direction int
-	Group string
-	Team string
-	TeamTag string
-	TeamChannel []string
-	Interface string
-	Roaming bool
-	RXMode int
+		RFAddress int
+		ParentType string
+		Index int
+		AESActive bool
+		Firmware string
+		AvailableFirmware string
+		Updatable bool
+		Version int
+		Flags int
+		LinkSourceRoles string
+		LinkTargetRoles string
+		Direction int
+		Group string
+		Team string
+		TeamTag string
+		TeamChannel []string
+		Interface string
+		Roaming bool
+		RXMode int
 	*/
 }
 

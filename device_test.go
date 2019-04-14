@@ -19,17 +19,17 @@ func TestBaseClient_ListDevices(t *testing.T) {
 			Params: []interface{}{
 				[]interface{}{
 					map[string]interface{}{
-						"TYPE": "aaa",
-						"ADDRESS": "bbb",
-						"CHILDREN": []string{"a", "b"},
-						"PARENT": "c",
+						"TYPE":      "aaa",
+						"ADDRESS":   "bbb",
+						"CHILDREN":  []string{"a", "b"},
+						"PARENT":    "c",
 						"PARAMSETS": []string{"VALUES", "EVENTS"},
 					},
 					map[string]interface{}{
-						"TYPE": "111",
-						"ADDRESS": "222",
-						"CHILDREN": []string{"1", "2"},
-						"PARENT": "3",
+						"TYPE":      "111",
+						"ADDRESS":   "222",
+						"CHILDREN":  []string{"1", "2"},
+						"PARENT":    "3",
 						"PARAMSETS": []string{"VALUES", "EVENTS"},
 					},
 				},
@@ -41,17 +41,17 @@ func TestBaseClient_ListDevices(t *testing.T) {
 	result, err := c.ListDevices()
 	ass.NoError(err)
 	ass.Equal([]DeviceDescription{{
-		Type:"aaa",
-		Address:"bbb",
-		Children:[]string{"a", "b"},
-		Parent:"c",
-		ParamSets:[]string{"VALUES", "EVENTS"},
+		Type:      "aaa",
+		Address:   "bbb",
+		Children:  []string{"a", "b"},
+		Parent:    "c",
+		ParamSets: []string{"VALUES", "EVENTS"},
 	}, {
-		Type:"111",
-		Address:"222",
-		Children:[]string{"1", "2"},
-		Parent:"3",
-		ParamSets:[]string{"VALUES", "EVENTS"},
+		Type:      "111",
+		Address:   "222",
+		Children:  []string{"1", "2"},
+		Parent:    "3",
+		ParamSets: []string{"VALUES", "EVENTS"},
 	}}, result)
 }
 
@@ -62,12 +62,12 @@ func TestBaseClient_GetValues(t *testing.T) {
 		ass.Equal("getParamset", method)
 		ass.Equal([]interface{}{
 			"aaa", "VALUES",
-		},params)
+		}, params)
 
 		return rpc.Response{
 			Params: []interface{}{
 				map[string]interface{}{
-					"STATE": "aaa",
+					"STATE":   "aaa",
 					"ADDRESS": 42,
 				},
 			},
@@ -78,7 +78,7 @@ func TestBaseClient_GetValues(t *testing.T) {
 	result, err := c.GetValues("aaa")
 	ass.NoError(err)
 	ass.Equal(map[string]interface{}{
-		"STATE": "aaa",
+		"STATE":   "aaa",
 		"ADDRESS": 42,
 	}, result)
 }
@@ -90,7 +90,7 @@ func TestBaseClient_GetValue(t *testing.T) {
 		ass.Equal("getValue", method)
 		ass.Equal([]interface{}{
 			"aaa", "bbb",
-		},params)
+		}, params)
 
 		return rpc.Response{
 			Params: []interface{}{
@@ -112,7 +112,7 @@ func TestBaseClient_SetValue(t *testing.T) {
 		ass.Equal("setValue", method)
 		ass.Equal([]interface{}{
 			"aaa", "bbb", 42,
-		},params)
+		}, params)
 
 		return rpc.Response{}, nil
 	})
