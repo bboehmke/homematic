@@ -33,7 +33,7 @@ func (c *client) Call(method string, params []interface{}) (Response, error) {
 		Params: params,
 	})
 	if err != nil {
-		return Response{}, nil
+		return Response{}, err
 	}
 
 	resp, err := c.client.Post(c.Url, "text/xml", buf)
@@ -46,6 +46,9 @@ func (c *client) Call(method string, params []interface{}) (Response, error) {
 	decoder := xml.NewDecoder(resp.Body)
 	decoder.CharsetReader = charset.NewReaderLabel
 	err = decoder.Decode(&response)
+	if err != nil {
+		return Response{}, err
+	}
 
 	if response.Fault != nil {
 		return response, fmt.Errorf("RPC error %s", response.Fault.String)
