@@ -11,10 +11,10 @@ import (
 // NewClient creates new client to a homematic CCU (RF & wired)
 func NewClient(host string) *Client {
 	return &Client{
-		Wired: BaseClient{
+		Wired: &BaseClient{
 			rpc.NewClient(fmt.Sprintf("http://%s:2000/", host)),
 		},
-		RF: BaseClient{
+		RF: &BaseClient{
 			rpc.NewClient(fmt.Sprintf("http://%s:2001/", host)),
 		},
 	}
@@ -22,8 +22,8 @@ func NewClient(host string) *Client {
 
 // Client holds wired and RF clients
 type Client struct {
-	Wired BaseClient
-	RF    BaseClient
+	Wired *BaseClient
+	RF    *BaseClient
 }
 
 // BaseClient provides functionality to interact with CCU
