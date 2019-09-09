@@ -6,18 +6,25 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"gitlab.com/bboehmke/homematic/rpc"
+	"gitlab.com/bboehmke/homematic/script"
 )
 
-type testClient func(method string, params []interface{}) (rpc.Response, error)
+type testRpcClient func(method string, params []interface{}) (rpc.Response, error)
 
-func (c testClient) Call(method string, params []interface{}) (rpc.Response, error) {
+func (c testRpcClient) Call(method string, params []interface{}) (rpc.Response, error) {
 	return c(method, params)
+}
+
+type testScriptClient func(script string) (script.Result, error)
+
+func (c testScriptClient) Call(script string) (script.Result, error) {
+	return c(script)
 }
 
 func TestBaseClient_ListMethods(t *testing.T) {
 	ass := assert.New(t)
 
-	client := testClient(func(method string, params []interface{}) (rpc.Response, error) {
+	client := testRpcClient(func(method string, params []interface{}) (rpc.Response, error) {
 		ass.Equal("system.listMethods", method)
 		ass.Nil(params)
 
@@ -28,7 +35,7 @@ func TestBaseClient_ListMethods(t *testing.T) {
 		}, nil
 	})
 
-	c := BaseClient{client}
+	c := BaseClient{rpc: client, script: nil}
 	methods, err := c.ListMethods()
 	ass.NoError(err)
 	ass.Equal([]string{"aaa", "bbb"}, methods)

@@ -6,16 +6,20 @@ import (
 	"github.com/spf13/cast"
 
 	"gitlab.com/bboehmke/homematic/rpc"
+	"gitlab.com/bboehmke/homematic/script"
 )
 
 // NewClient creates new client to a homematic CCU (RF & wired)
 func NewClient(host string) *Client {
+	s := script.NewClient(fmt.Sprintf("http://%s:8181/", host))
 	return &Client{
 		Wired: &BaseClient{
-			rpc.NewClient(fmt.Sprintf("http://%s:2000/", host)),
+			rpc:    rpc.NewClient(fmt.Sprintf("http://%s:2000/", host)),
+			script: s,
 		},
 		RF: &BaseClient{
-			rpc.NewClient(fmt.Sprintf("http://%s:2001/", host)),
+			rpc:    rpc.NewClient(fmt.Sprintf("http://%s:2001/", host)),
+			script: s,
 		},
 	}
 }
@@ -28,7 +32,8 @@ type Client struct {
 
 // BaseClient provides functionality to interact with CCU
 type BaseClient struct {
-	rpc rpc.Client
+	rpc    rpc.Client
+	script script.Client
 }
 
 // ListMethods returns a list with available methods

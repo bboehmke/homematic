@@ -2,8 +2,26 @@ package homematic
 
 import "github.com/spf13/cast"
 
+var devNameScript = `string s_device;
+string s_channel;
+string output = "";
+foreach(s_device, dom.GetObject(ID_DEVICES).EnumUsedIDs()) {
+	var o_device = dom.GetObject(s_device);
+	output = output # o_device.Address() # "=" # o_device.Name() # "\n" ;
+	foreach(s_channel, o_device.Channels().EnumUsedIDs()) {
+		var o_channel = dom.GetObject(s_channel);
+		output = output # o_channel.Address() # "=" # o_channel.Name() # "\n" ;
+	}
+}`
+
 // ListDevices that are available
 func (c *BaseClient) ListDevices() ([]DeviceDescription, error) {
+	scriptData, err := c.script.Call(devNameScript)
+	if err != nil {
+		return nil, err
+	}
+	deviceNames := scriptData.GetMap("output")
+
 	response, err := c.rpc.Call(
 		"listDevices",
 		nil)
@@ -14,13 +32,14 @@ func (c *BaseClient) ListDevices() ([]DeviceDescription, error) {
 	rawData := cast.ToSlice(response.FirstParam())
 	devices := make([]DeviceDescription, len(rawData))
 	for i, v := range rawData {
-		devices[i] = loadDeviceDescription(v)
+		devices[i] = loadDeviceDescription(v, deviceNames)
 	}
 	return devices, nil
 }
 
 // DeviceDescription contains information about device
 type DeviceDescription struct {
+	Name    string
 	Type    string
 	Address string
 
@@ -52,7 +71,7 @@ type DeviceDescription struct {
 }
 
 // loadDeviceDescription creates DeviceDescription from received data
-func loadDeviceDescription(data interface{}) DeviceDescription {
+func loadDeviceDescription(data interface{}, deviceNames map[string]string) DeviceDescription {
 	device := DeviceDescription{}
 	for key, value := range cast.ToStringMap(data) {
 		switch key {
@@ -60,6 +79,7 @@ func loadDeviceDescription(data interface{}) DeviceDescription {
 			device.Type = cast.ToString(value)
 		case "ADDRESS":
 			device.Address = cast.ToString(value)
+			device.Name = deviceNames[device.Address]
 
 		case "CHILDREN":
 			device.Children = cast.ToStringSlice(value)
