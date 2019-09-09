@@ -136,3 +136,91 @@ func TestValue_Interface(t *testing.T) {
 		})
 	}
 }
+
+var benchmarkData = []byte(`<methodResponse>
+  <params>
+    <param>
+      <value>
+        <string>test</string>
+      </value>
+    </param>
+    <param>
+      <value>
+        test
+      </value>
+    </param>
+    <param>
+      <value>
+        <int>42</int>
+      </value>
+    </param>
+    <param>
+      <value>
+        <i4>42</i4>
+      </value>
+    </param>
+    <param>
+      <value>
+        <boolean>1</boolean>
+      </value>
+    </param>
+    <param>
+      <value>
+        <boolean>0</boolean>
+      </value>
+    </param>
+    <param>
+      <value>
+        <double>1.2</double>
+      </value>
+    </param>
+    <param>
+      <value>
+        <array>
+		  <data>
+			<value><i4>111</i4></value>
+			<value><i4>222</i4></value>
+		  </data>
+		</array>
+      </value>
+    </param>
+    <param>
+      <value>
+        <struct>
+		  <member>
+			<name>aaa</name>
+			<value><i4>111</i4></value>
+		  </member>
+		  <member>
+			<name>bbb</name>
+			<value><i4>222</i4></value>
+		  </member>
+		</struct>
+      </value>
+    </param>
+  </params>
+  <fault>
+    <value>
+      <struct>
+        <member>
+          <name>faultCode</name>
+          <value><int>4</int></value>
+        </member>
+        <member>
+          <name>faultString</name>
+          <value><string>Too many parameters</string></value>
+        </member>
+      </struct>
+    </value>
+  </fault>
+</methodResponse>`)
+
+func BenchmarkResponse(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		var response Response
+		err := xml.Unmarshal(benchmarkData, &response)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
