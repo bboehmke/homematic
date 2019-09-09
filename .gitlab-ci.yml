@@ -1,0 +1,10 @@
+image: golang:1.13
+
+stages:
+    - test
+
+test:
+    stage: test
+    script:
+      - go test -coverprofile coverage.txt -race -v ./...
+      - go tool cover -func=coverage.txt

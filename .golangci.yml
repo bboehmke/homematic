@@ -1,0 +1,7 @@
+
+linters:
+  enable:
+    - golint
+
+issues:
+  exclude-use-default: false
