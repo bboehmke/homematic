@@ -3,6 +3,10 @@ package rpc
 import (
 	"encoding/xml"
 	"errors"
+	"io"
+	"strings"
+
+	"github.com/beevik/etree"
 )
 
 // Request for XML RPCs
@@ -56,6 +60,37 @@ func (r Request) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 		}
 	}
 	return e.EncodeToken(xml.EndElement{Name: methodCall})
+}
+
+// ParseRequest from XML
+func ParseRequest(reader io.Reader) (*Request, error) {
+	doc := etree.NewDocument()
+	_, err := doc.ReadFrom(reader)
+	if err != nil {
+		return nil, err
+	}
+
+	// handle parameters
+	elements := doc.FindElements("/methodCall/params/param/value")
+	request := &Request{
+		Params: make([]interface{}, len(elements)),
+	}
+
+	for idx, element := range elements {
+		request.Params[idx], err = parseValue(element)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// handle name
+	nameElement := doc.FindElement("/methodCall/methodName")
+	if nameElement == nil {
+		return nil, errors.New("method name is missing")
+	}
+	request.Method = strings.TrimSpace(nameElement.Text())
+
+	return request, nil
 }
 
 // encodeValue convert value to XML data
