@@ -2,11 +2,28 @@ package rpc
 
 import (
 	"encoding/xml"
+	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
+	"github.com/beevik/etree"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestFault_toMap(t *testing.T) {
+	ass := assert.New(t)
+
+	fault := Fault{
+		Code:   42,
+		String: "test",
+	}
+
+	ass.Equal(map[string]interface{}{
+		"faultCode":   fault.Code,
+		"faultString": fault.String,
+	}, fault.toMap())
+}
 
 func TestResponse_FirstParam(t *testing.T) {
 	ass := assert.New(t)
@@ -18,81 +35,93 @@ func TestResponse_FirstParam(t *testing.T) {
 	ass.Equal(42, response.FirstParam())
 }
 
-func TestResponse_UnmarshalXML(t *testing.T) {
+func TestResponse_MarshalXML(t *testing.T) {
 	ass := assert.New(t)
 
-	data := `<methodResponse>
-  <params>
-    <param>
-      <value>
-        <string>test</string>
-      </value>
-    </param>
-  </params>
-</methodResponse>`
+	resp := Response{
+		Params: []interface{}{
+			"test",
+		},
+	}
 
-	var response Response
-	err := xml.Unmarshal([]byte(data), &response)
+	data, err := xml.Marshal(&resp)
 	ass.NoError(err)
+	ass.Equal("<methodResponse><params><param><value><string>test</string></value></param></params></methodResponse>", string(data))
 }
 
-func TestFault_UnmarshalXML(t *testing.T) {
+func TestParseResponse(t *testing.T) {
 	ass := assert.New(t)
 
-	data := `<fault>
-  <value>
-    <struct>
-      <member>
-        <name>faultCode</name>
-        <value><int>4</int></value>
-      </member>
-      <member>
-        <name>faultString</name>
-        <value><string>Too many parameters</string></value>
-      </member>
-    </struct>
-  </value>
-</fault>`
+	_, err := ParseResponse(
+		strings.NewReader("<<"))
+	ass.EqualError(err, "XML syntax error on line 1: expected element name after <")
 
-	var fault Fault
-	err := xml.Unmarshal([]byte(data), &fault)
+	_, err = ParseResponse(
+		strings.NewReader("<methodResponse><params><param><value><invalid>test</invalid></param></params></methodResponse>"))
+	ass.EqualError(err, "invalid value type invalid")
+
+	_, err = ParseResponse(
+		strings.NewReader("<methodResponse><fault><value><invalid>test</invalid></fault></methodResponse>"))
+	ass.EqualError(err, "invalid value type invalid")
+
+	_, err = ParseResponse(
+		strings.NewReader("<methodResponse><fault><value>test</fault></methodResponse>"))
+	ass.EqualError(err, "invalid fault value")
+
+	resp, err := ParseResponse(
+		strings.NewReader("<methodResponse><params><param><value>test</value></param></params><fault><value><struct><member><name>faultCode</name><value><int>4</int></value></member><member><name>faultString</name><value>faultString</value></member></struct></value></fault></methodResponse>"))
 	ass.NoError(err)
-	ass.Equal(int32(4), fault.Code)
-	ass.Equal("Too many parameters", fault.String)
+	ass.Len(resp.Params, 1)
+	ass.Equal("test", resp.Params[0])
+	ass.Equal(int32(4), resp.Fault.Code)
+	ass.Equal("faultString", resp.Fault.String)
 }
 
 var valueTestData = []struct {
 	name  string
 	xml   string
 	value interface{}
+	err   error
 }{{
+	"invalid_type",
+	"<invalid>test</invalid>",
+	nil,
+	errors.New("invalid value type invalid"),
+}, {
 	"string",
 	"<string>test</string>",
 	"test",
+	nil,
 }, {
 	"string_raw",
 	"test",
 	"test",
+	nil,
 }, {
 	"int",
 	"<int>42</int>",
 	int32(42),
+	nil,
 }, {
 	"i4",
 	"<i4>42</i4>",
 	int32(42),
+	nil,
 }, {
 	"bool_true",
 	"<boolean>1</boolean>",
 	true,
+	nil,
 }, {
 	"bool_false",
 	"<boolean>0</boolean>",
 	false,
+	nil,
 }, {
 	"double",
 	"<double>1.2</double>",
 	float64(1.2),
+	nil,
 }, {
 	"array",
 	`<array>
@@ -104,6 +133,16 @@ var valueTestData = []struct {
 	[]interface{}{
 		int32(111), int32(222),
 	},
+	nil,
+}, {
+	"array",
+	`<array>
+  <data>
+    <value><invalid>111</invalid></value>
+  </data>
+</array>`,
+	nil,
+	errors.New("invalid value type invalid"),
 }, {
 	"struct",
 	`<struct>
@@ -120,24 +159,53 @@ var valueTestData = []struct {
 		"aaa": int32(111),
 		"bbb": int32(222),
 	},
+	nil,
+}, {
+	"struct",
+	`<struct>
+  <member>
+  </member>
+</struct>`,
+	nil,
+	errors.New("missing struct name element"),
+}, {
+	"struct",
+	`<struct>
+  <member>
+    <name>aaa</name>
+  </member>
+</struct>`,
+	nil,
+	errors.New("missing struct value element"),
+}, {
+	"struct",
+	`<struct>
+  <member>
+    <name>aaa</name>
+    <value><invalid>111</invalid></value>
+  </member>
+</struct>`,
+	nil,
+	errors.New("invalid value type invalid"),
 }}
 
-func TestValue_Interface(t *testing.T) {
-
+func TestParseValue(t *testing.T) {
 	for _, d := range valueTestData {
 		t.Run(d.name, func(st *testing.T) {
 			ass := assert.New(st)
 
-			var v value
-			data := fmt.Sprintf("<value>%s</value>", d.xml)
-			err := xml.Unmarshal([]byte(data), &v)
-			ass.NoError(err)
-			ass.Equal(d.value, v.Interface())
+			doc := etree.NewDocument()
+			ass.NoError(doc.ReadFromString(
+				fmt.Sprintf("<value>%s</value>", d.xml)))
+
+			value, err := parseValue(doc.SelectElement("value"))
+			ass.Equal(d.err, err)
+			ass.Equal(d.value, value)
 		})
 	}
 }
 
-var benchmarkData = []byte(`<methodResponse>
+var benchmarkData = `<methodResponse>
   <params>
     <param>
       <value>
@@ -213,14 +281,14 @@ var benchmarkData = []byte(`<methodResponse>
       </struct>
     </value>
   </fault>
-</methodResponse>`)
+</methodResponse>`
 
-func BenchmarkResponse(b *testing.B) {
+func BenchmarkParseResponse(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		var response Response
-		err := xml.Unmarshal(benchmarkData, &response)
+		response, err := ParseResponse(strings.NewReader(benchmarkData))
 		if err != nil {
 			b.Fatal(err)
 		}
+		_ = response
 	}
 }

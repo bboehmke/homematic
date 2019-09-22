@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"encoding/xml"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -31,6 +32,29 @@ func TestRequest_MarshalXML(t *testing.T) {
 </methodCall>`, string(data))
 }
 
+func TestParseRequest(t *testing.T) {
+	ass := assert.New(t)
+
+	_, err := ParseRequest(
+		strings.NewReader("<<"))
+	ass.EqualError(err, "XML syntax error on line 1: expected element name after <")
+
+	_, err = ParseRequest(
+		strings.NewReader("<methodCall><params><param><value><invalid>test</invalid></param></params></methodCall>"))
+	ass.EqualError(err, "invalid value type invalid")
+
+	_, err = ParseRequest(
+		strings.NewReader("<methodCall><params><param><value>test</param></params></methodCall>"))
+	ass.EqualError(err, "method name is missing")
+
+	request, err := ParseRequest(
+		strings.NewReader("<methodCall><methodName>func</methodName><params><param><value>test</param></params></methodCall>"))
+	ass.NoError(err)
+	ass.Equal("func", request.Method)
+	ass.Len(request.Params, 1)
+	ass.Equal("test", request.Params[0])
+}
+
 func TestRequest_encodeValue(t *testing.T) {
 	ass := assert.New(t)
 
@@ -52,6 +76,13 @@ func TestRequest_encodeValue(t *testing.T) {
 			uint64(15),
 			float32(1.1),
 			float64(2.2),
+			[]interface{}{
+				111,
+				222,
+			},
+			map[string]interface{}{
+				"aaa": 111,
+			},
 		},
 	}
 
@@ -133,6 +164,32 @@ func TestRequest_encodeValue(t *testing.T) {
     <param>
       <value>
         <double>2.2</double>
+      </value>
+    </param>
+    <param>
+      <value>
+        <array>
+          <data>
+            <value>
+              <int>111</int>
+            </value>
+            <value>
+              <int>222</int>
+            </value>
+          </data>
+        </array>
+      </value>
+    </param>
+    <param>
+      <value>
+        <struct>
+          <member>
+            <name>aaa</name>
+            <value>
+              <int>111</int>
+            </value>
+          </member>
+        </struct>
       </value>
     </param>
   </params>

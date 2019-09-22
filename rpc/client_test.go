@@ -39,4 +39,7 @@ func TestClient_Call(t *testing.T) {
 	ass.NoError(err)
 	ass.Equal(int32(42), response.FirstParam())
 
+	ip, err := c.LocalIP()
+	ass.NoError(err)
+	ass.Equal("127.0.0.1", ip)
 }

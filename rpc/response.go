@@ -2,9 +2,28 @@ package rpc
 
 import (
 	"encoding/xml"
+	"errors"
+	"fmt"
+	"io"
+	"strings"
 
+	"github.com/beevik/etree"
 	"github.com/spf13/cast"
 )
+
+// Fault information of response
+type Fault struct {
+	Code   int32
+	String string
+}
+
+// toMap returns data for fault entry
+func (f *Fault) toMap() map[string]interface{} {
+	return map[string]interface{}{
+		"faultCode":   f.Code,
+		"faultString": f.String,
+	}
+}
 
 // Response of XML RPCs
 type Response struct {
@@ -20,157 +39,144 @@ func (r *Response) FirstParam() interface{} {
 	return nil
 }
 
-// UnmarshalXML convert XML to Response
-func (r *Response) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	var data struct {
-		Params []param `xml:"params>param"`
-		Fault  *Fault  `xml:"fault"`
-	}
+// MarshalXML convert response to XML
+func (r *Response) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
+	methodResponse := xml.Name{Local: "methodResponse"}
 
-	if err := d.DecodeElement(&data, &start); err != nil {
+	err := e.EncodeToken(xml.StartElement{Name: methodResponse})
+	if err != nil {
 		return err
 	}
 
-	r.Fault = data.Fault
-	if data.Params != nil {
-		r.Params = make([]interface{}, len(data.Params))
-		for i, v := range data.Params {
-			r.Params[i] = v.Value.Interface()
+	if len(r.Params) > 0 {
+		params := xml.Name{Local: "params"}
+		err = e.EncodeToken(xml.StartElement{Name: params})
+		if err != nil {
+			return err
+		}
+
+		param := xml.Name{Local: "param"}
+		for _, p := range r.Params {
+			err = e.EncodeToken(xml.StartElement{Name: param})
+			if err != nil {
+				return err
+			}
+			err = encodeValue(p, e)
+			if err != nil {
+				return err
+			}
+			err = e.EncodeToken(xml.EndElement{Name: param})
+			if err != nil {
+				return err
+			}
+		}
+
+		err = e.EncodeToken(xml.EndElement{Name: params})
+		if err != nil {
+			return err
 		}
 	}
 
-	return nil
+	return e.EncodeToken(xml.EndElement{Name: methodResponse})
 }
 
-// Fault information of response
-type Fault struct {
-	Code   int32
-	String string
-}
-
-// UnmarshalXML convert XML to Fault
-func (f *Fault) UnmarshalXML(d *xml.Decoder, start xml.StartElement) error {
-	var data param
-	if err := d.DecodeElement(&data, &start); err != nil {
-		return err
+// ParseResponse from XML
+func ParseResponse(reader io.Reader) (*Response, error) {
+	doc := etree.NewDocument()
+	_, err := doc.ReadFrom(reader)
+	if err != nil {
+		return nil, err
 	}
-	dat := data.Value.Struct.Interface()
 
-	f.Code = cast.ToInt32(dat["faultCode"])
-	f.String = cast.ToString(dat["faultString"])
-	return nil
-}
-
-// param helper to parse parameters
-type param struct {
-	Value value `xml:"value"`
-}
-
-// value parses any value type
-type value struct {
-	Content string      `xml:",innerxml"`
-	Array   *array      `xml:"array"`
-	Struct  *structData `xml:"struct"`
-	Int     *integer    `xml:"int"`
-	I4      *integer    `xml:"i4"`
-	Boolean *boolean    `xml:"boolean"`
-	Double  *double     `xml:"double"`
-	String  *str        `xml:"string"`
-}
-
-// Interface returns value as go type
-func (v *value) Interface() interface{} {
-	if v.Array != nil {
-		return v.Array.Interface()
+	// handle parameters
+	elements := doc.FindElements("/methodResponse/params/param/value")
+	response := &Response{
+		Params: make([]interface{}, len(elements)),
 	}
-	if v.Struct != nil {
-		return v.Struct.Interface()
+
+	for idx, element := range elements {
+		response.Params[idx], err = parseValue(element)
+		if err != nil {
+			return nil, err
+		}
 	}
-	if v.Int != nil {
-		return v.Int.Interface()
+
+	// handle faults
+	faultElement := doc.FindElement("/methodResponse/fault/value")
+	if faultElement != nil {
+		value, err := parseValue(faultElement)
+		if err != nil {
+			return nil, err
+		}
+		data, ok := value.(map[string]interface{})
+		if !ok {
+			return nil, errors.New("invalid fault value")
+		}
+		response.Fault = &Fault{
+			Code:   cast.ToInt32(data["faultCode"]),
+			String: cast.ToString(data["faultString"]),
+		}
 	}
-	if v.I4 != nil {
-		return v.I4.Interface()
+
+	return response, nil
+}
+
+// parseValue element to go interface
+func parseValue(element *etree.Element) (interface{}, error) {
+	// use text of element if child elements are missing
+	children := element.ChildElements()
+	if len(children) == 0 {
+		return strings.TrimSpace(element.Text()), nil
 	}
-	if v.Boolean != nil {
-		return v.Boolean.Interface()
+	e := children[0]
+
+	switch e.Tag {
+	case "string":
+		return strings.TrimSpace(e.Text()), nil
+
+	case "int", "i4":
+		return cast.ToInt32E(strings.TrimSpace(e.Text()))
+
+	case "boolean":
+		return cast.ToBoolE(strings.TrimSpace(e.Text()))
+
+	case "double":
+		return cast.ToFloat64E(strings.TrimSpace(e.Text()))
+
+	case "array":
+		elements := e.FindElements("./data/value")
+		values := make([]interface{}, len(elements))
+		var err error
+		for idx, valueElement := range elements {
+			values[idx], err = parseValue(valueElement)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return values, nil
+
+	case "struct":
+		elements := e.FindElements("./member")
+		values := make(map[string]interface{}, len(elements))
+		var err error
+		for _, memberElement := range elements {
+			nameElement := memberElement.SelectElement("name")
+			if nameElement == nil {
+				return nil, errors.New("missing struct name element")
+			}
+			valueElement := memberElement.SelectElement("value")
+			if valueElement == nil {
+				return nil, errors.New("missing struct value element")
+			}
+
+			values[nameElement.Text()], err = parseValue(valueElement)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return values, nil
+
+	default:
+		return nil, fmt.Errorf("invalid value type %s", e.Tag)
 	}
-	if v.Double != nil {
-		return v.Double.Interface()
-	}
-	if v.String != nil {
-		return v.String.Interface()
-	}
-	return v.Content
-}
-
-// str handles string data types
-type str struct {
-	Content string `xml:",innerxml"`
-}
-
-// Interface returns data as go type
-func (s *str) Interface() interface{} {
-	return cast.ToString(s.Content)
-}
-
-// double handles double data types
-type double struct {
-	Content string `xml:",innerxml"`
-}
-
-// Interface returns data as go type
-func (d *double) Interface() interface{} {
-	return cast.ToFloat64(d.Content)
-}
-
-// boolean handles boolean data types
-type boolean struct {
-	Content string `xml:",innerxml"`
-}
-
-// Interface returns data as go type
-func (b *boolean) Interface() interface{} {
-	return cast.ToBool(b.Content)
-}
-
-// integer handles integer data types
-type integer struct {
-	Content string `xml:",innerxml"`
-}
-
-// Interface returns data as go type
-func (i *integer) Interface() interface{} {
-	return cast.ToInt32(i.Content)
-}
-
-// array handles array data types
-type array struct {
-	Data []value `xml:"data>value"`
-}
-
-// Interface returns data as go type
-func (a *array) Interface() interface{} {
-	data := make([]interface{}, len(a.Data))
-	for i, v := range a.Data {
-		data[i] = v.Interface()
-	}
-	return data
-}
-
-// structData handles struct data types
-type structData struct {
-	Member []struct {
-		Name  string `xml:"name"`
-		Value value  `xml:"value"`
-	} `xml:"member"`
-}
-
-// Interface returns data as go type
-func (s *structData) Interface() map[string]interface{} {
-	data := make(map[string]interface{}, len(s.Member))
-	for _, m := range s.Member {
-		data[m.Name] = m.Value.Interface()
-	}
-	return data
 }

@@ -1,6 +1,12 @@
 package homematic
 
-import "github.com/spf13/cast"
+import (
+	"sync"
+
+	"github.com/spf13/cast"
+
+	"gitlab.com/bboehmke/homematic/rpc"
+)
 
 var devNameScript = `string s_device;
 string s_channel;
@@ -14,31 +20,23 @@ foreach(s_device, dom.GetObject(ID_DEVICES).EnumUsedIDs()) {
 	}
 }`
 
-// ListDevices that are available
-func (c *BaseClient) ListDevices() ([]DeviceDescription, error) {
-	scriptData, err := c.script.Call(devNameScript)
-	if err != nil {
-		return nil, err
+// loadDevice from received data
+func loadDevice(data map[string]interface{}) *Device {
+	return &Device{
+		Type:      cast.ToString(data["TYPE"]),
+		Address:   cast.ToString(data["ADDRESS"]),
+		Children:  cast.ToStringSlice(data["CHILDREN"]),
+		Parent:    cast.ToString(data["PARENT"]),
+		ParamSets: cast.ToStringSlice(data["PARAMSETS"]),
 	}
-	deviceNames := scriptData.GetMap("output")
-
-	response, err := c.rpc.Call(
-		"listDevices",
-		nil)
-	if err != nil {
-		return nil, err
-	}
-
-	rawData := cast.ToSlice(response.FirstParam())
-	devices := make([]DeviceDescription, len(rawData))
-	for i, v := range rawData {
-		devices[i] = loadDeviceDescription(v, deviceNames)
-	}
-	return devices, nil
 }
 
-// DeviceDescription contains information about device
-type DeviceDescription struct {
+// Device of CCU
+type Device struct {
+	client            rpc.Client
+	valuesDescription map[string]ParameterDescription
+	mutex             sync.RWMutex
+
 	Name    string
 	Type    string
 	Address string
@@ -47,78 +45,134 @@ type DeviceDescription struct {
 	Parent    string
 	ParamSets []string
 
-	/*
-		RFAddress int
-		ParentType string
-		Index int
-		AESActive bool
-		Firmware string
-		AvailableFirmware string
-		Updatable bool
-		Version int
-		Flags int
-		LinkSourceRoles string
-		LinkTargetRoles string
-		Direction int
-		Group string
-		Team string
-		TeamTag string
-		TeamChannel []string
-		Interface string
-		Roaming bool
-		RXMode int
-	*/
+	onValueChange func(key string, value interface{})
 }
 
-// loadDeviceDescription creates DeviceDescription from received data
-func loadDeviceDescription(data interface{}, deviceNames map[string]string) DeviceDescription {
-	device := DeviceDescription{}
-	for key, value := range cast.ToStringMap(data) {
-		switch key {
-		case "TYPE":
-			device.Type = cast.ToString(value)
-		case "ADDRESS":
-			device.Address = cast.ToString(value)
-			device.Name = deviceNames[device.Address]
+// nameChanged updates device name
+func (d *Device) nameChanged(name string) {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
 
-		case "CHILDREN":
-			device.Children = cast.ToStringSlice(value)
-		case "PARENT":
-			device.Parent = cast.ToString(value)
+	d.Name = name
+}
 
-		case "PARAMSETS":
-			device.ParamSets = cast.ToStringSlice(value)
+// valueChanged calls OnValueChange function if set
+func (d *Device) valueChanged(key string, value interface{}) {
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
+
+	if d.onValueChange != nil {
+		d.onValueChange(key, value)
+	}
+}
+
+// nameChanged updates device name
+func (d *Device) SetValueChangedHandler(handler func(key string, value interface{})) {
+	d.mutex.Lock()
+	defer d.mutex.Unlock()
+
+	d.onValueChange = handler
+}
+
+// HasValues returns true if device has values
+func (d *Device) HasValues() bool {
+	for _, p := range d.ParamSets {
+		if p == "VALUES" {
+			return true
 		}
 	}
-	return device
+	return false
 }
 
-// GetValues returns all values of a device
-func (c *BaseClient) GetValues(address string) (map[string]interface{}, error) {
-	response, err := c.rpc.Call(
+// GetValues of a device
+func (d *Device) GetValues() (map[string]interface{}, error) {
+	response, err := d.client.Call(
 		"getParamset",
-		[]interface{}{address, "VALUES"})
+		[]interface{}{d.Address, "VALUES"})
 	if err != nil {
 		return nil, err
 	}
 	return cast.ToStringMap(response.FirstParam()), nil
 }
 
-// GetValue returns a specific value of a device
-func (c *BaseClient) GetValue(address, state string) (interface{}, error) {
-	response, err := c.rpc.Call(
+// GetValue of a device with the given name
+func (d *Device) GetValue(name string) (interface{}, error) {
+	response, err := d.client.Call(
 		"getValue",
-		[]interface{}{address, state})
+		[]interface{}{d.Address, name})
 	if err != nil {
 		return nil, err
 	}
 	return response.FirstParam(), nil
 }
 
-// SetValue sets a specific value of a device
-func (c *BaseClient) SetValue(address, state string, value interface{}) error {
-	_, err := c.rpc.Call(
+// SetValue of a device with given name
+func (d *Device) SetValue(name string, value interface{}) error {
+	_, err := d.client.Call(
 		"setValue",
-		[]interface{}{address, state, value})
+		[]interface{}{d.Address, name, value})
 	return err
+}
+
+// GetValuesDescription for this device
+func (d *Device) GetValuesDescription() (map[string]ParameterDescription, error) {
+	// load on first call
+	if d.valuesDescription == nil {
+		response, err := d.client.Call(
+			"getParamsetDescription",
+			[]interface{}{d.Address, "VALUES"})
+		if err != nil {
+			return nil, err
+		}
+
+		rawData := cast.ToStringMap(response.FirstParam())
+		d.valuesDescription = make(map[string]ParameterDescription, len(rawData))
+		for key, value := range rawData {
+			d.valuesDescription[key] = loadParameterDescription(value)
+		}
+	}
+	return d.valuesDescription, nil
+}
+
+// ParameterDescription contains information about a parameter
+type ParameterDescription struct {
+	ID       string
+	Default  interface{}
+	Type     string
+	Unit     string
+	TabOrder int
+
+	OperationRead  bool
+	OperationWrite bool
+	OperationEvent bool
+
+	FlagVisible   bool
+	FlagInternal  bool
+	FlagTransform bool
+	FlagService   bool
+	FlagSticky    bool
+}
+
+// loadParameterDescription from received data
+func loadParameterDescription(data interface{}) ParameterDescription {
+	dataMap := cast.ToStringMap(data)
+	operations := cast.ToInt32(dataMap["OPERATIONS"])
+	flags := cast.ToInt32(dataMap["FLAGS"])
+	return ParameterDescription{
+		ID:       cast.ToString(dataMap["ID"]),
+		Default:  dataMap["DEFAULT"],
+		Type:     cast.ToString(dataMap["TYPE"]),
+		Unit:     cast.ToString(dataMap["UNIT"]),
+		TabOrder: cast.ToInt(dataMap["TAB_ORDER"]),
+
+		OperationRead:  (operations & 0x01) != 0,
+		OperationWrite: (operations & 0x02) != 0,
+		OperationEvent: (operations & 0x04) != 0,
+
+		FlagVisible:   (flags & 0x01) != 0,
+		FlagInternal:  (flags & 0x02) != 0,
+		FlagTransform: (flags & 0x04) != 0,
+		FlagService:   (flags & 0x08) != 0,
+		FlagSticky:    (flags & 0x10) != 0,
+	}
 }

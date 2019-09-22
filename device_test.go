@@ -1,132 +1,174 @@
 package homematic
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 
 	"gitlab.com/bboehmke/homematic/rpc"
-	"gitlab.com/bboehmke/homematic/script"
 )
 
-func TestBaseClient_ListDevices(t *testing.T) {
+func TestDevice_nameChanged(t *testing.T) {
 	ass := assert.New(t)
 
-	client := testRpcClient(func(method string, params []interface{}) (rpc.Response, error) {
-		ass.Equal("listDevices", method)
-		ass.Nil(params)
+	device := &Device{
+		Name: "aaa",
+	}
 
-		return rpc.Response{
-			Params: []interface{}{
-				[]interface{}{
-					map[string]interface{}{
-						"TYPE":      "aaa",
-						"ADDRESS":   "bbb",
-						"CHILDREN":  []string{"a", "b"},
-						"PARENT":    "c",
-						"PARAMSETS": []string{"VALUES", "EVENTS"},
-					},
-					map[string]interface{}{
-						"TYPE":      "111",
-						"ADDRESS":   "222",
-						"CHILDREN":  []string{"1", "2"},
-						"PARENT":    "3",
-						"PARAMSETS": []string{"VALUES", "EVENTS"},
-					},
-				},
-			},
-		}, nil
-	})
-
-	scriptClient := testScriptClient(func(s string) (script.Result, error) {
-		ass.Equal(devNameScript, s)
-		return script.Result{
-			"output": "bbb=b2b",
-		}, nil
-	})
-
-	c := BaseClient{rpc: client, script: scriptClient}
-	result, err := c.ListDevices()
-	ass.NoError(err)
-	ass.Equal([]DeviceDescription{{
-		Name:      "b2b",
-		Type:      "aaa",
-		Address:   "bbb",
-		Children:  []string{"a", "b"},
-		Parent:    "c",
-		ParamSets: []string{"VALUES", "EVENTS"},
-	}, {
-		Name:      "",
-		Type:      "111",
-		Address:   "222",
-		Children:  []string{"1", "2"},
-		Parent:    "3",
-		ParamSets: []string{"VALUES", "EVENTS"},
-	}}, result)
+	ass.Equal("aaa", device.Name)
+	device.nameChanged("bbb")
+	ass.Equal("bbb", device.Name)
 }
 
-func TestBaseClient_GetValues(t *testing.T) {
+func TestDevice_valueChanged(t *testing.T) {
 	ass := assert.New(t)
 
-	client := testRpcClient(func(method string, params []interface{}) (rpc.Response, error) {
-		ass.Equal("getParamset", method)
-		ass.Equal([]interface{}{
-			"aaa", "VALUES",
-		}, params)
+	device := new(Device)
 
-		return rpc.Response{
+	device.SetValueChangedHandler(func(key string, value interface{}) {
+		ass.Equal("aaa", key)
+		ass.Equal("bbb", value)
+	})
+	device.valueChanged("aaa", "bbb")
+}
+
+func TestDevice_HasValues(t *testing.T) {
+	ass := assert.New(t)
+
+	device := new(Device)
+
+	ass.False(device.HasValues())
+	device.ParamSets = []string{"VALUES"}
+	ass.True(device.HasValues())
+}
+
+func TestDevice_GetValues(t *testing.T) {
+	ass := assert.New(t)
+
+	device := &Device{
+		Address: "address",
+	}
+
+	device.client = testRpcClient(func(method string, params []interface{}) (*rpc.Response, error) {
+		ass.Equal("getParamset", method)
+		ass.Equal([]interface{}{"address", "VALUES"}, params)
+		return nil, errors.New("test")
+	})
+	_, err := device.GetValues()
+	ass.EqualError(err, "test")
+
+	device.client = testRpcClient(func(method string, params []interface{}) (*rpc.Response, error) {
+		ass.Equal("getParamset", method)
+		ass.Equal([]interface{}{"address", "VALUES"}, params)
+		return &rpc.Response{
 			Params: []interface{}{
 				map[string]interface{}{
-					"STATE":   "aaa",
-					"ADDRESS": 42,
+					"aaa": 111,
+					"bbb": 222,
 				},
 			},
 		}, nil
 	})
-
-	c := BaseClient{rpc: client, script: nil}
-	result, err := c.GetValues("aaa")
+	values, err := device.GetValues()
 	ass.NoError(err)
 	ass.Equal(map[string]interface{}{
-		"STATE":   "aaa",
-		"ADDRESS": 42,
-	}, result)
+		"aaa": 111,
+		"bbb": 222,
+	}, values)
 }
 
-func TestBaseClient_GetValue(t *testing.T) {
+func TestDevice_GetValue(t *testing.T) {
 	ass := assert.New(t)
 
-	client := testRpcClient(func(method string, params []interface{}) (rpc.Response, error) {
-		ass.Equal("getValue", method)
-		ass.Equal([]interface{}{
-			"aaa", "bbb",
-		}, params)
+	device := &Device{
+		Address: "address",
+	}
 
-		return rpc.Response{
+	device.client = testRpcClient(func(method string, params []interface{}) (*rpc.Response, error) {
+		ass.Equal("getValue", method)
+		ass.Equal([]interface{}{"address", "testDevice"}, params)
+		return nil, errors.New("test")
+	})
+	_, err := device.GetValue("testDevice")
+	ass.EqualError(err, "test")
+
+	device.client = testRpcClient(func(method string, params []interface{}) (*rpc.Response, error) {
+		ass.Equal("getValue", method)
+		ass.Equal([]interface{}{"address", "testDevice"}, params)
+		return &rpc.Response{
 			Params: []interface{}{
-				42,
+				111,
 			},
 		}, nil
 	})
-
-	c := BaseClient{rpc: client, script: nil}
-	result, err := c.GetValue("aaa", "bbb")
+	value, err := device.GetValue("testDevice")
 	ass.NoError(err)
-	ass.Equal(42, result)
+	ass.Equal(111, value)
 }
 
-func TestBaseClient_SetValue(t *testing.T) {
+func TestDevice_SetValue(t *testing.T) {
 	ass := assert.New(t)
 
-	client := testRpcClient(func(method string, params []interface{}) (rpc.Response, error) {
+	device := &Device{
+		Address: "address",
+	}
+
+	device.client = testRpcClient(func(method string, params []interface{}) (*rpc.Response, error) {
 		ass.Equal("setValue", method)
-		ass.Equal([]interface{}{
-			"aaa", "bbb", 42,
-		}, params)
-
-		return rpc.Response{}, nil
+		ass.Equal([]interface{}{"address", "aaa", 111}, params)
+		return nil, errors.New("test")
 	})
+	err := device.SetValue("aaa", 111)
+	ass.EqualError(err, "test")
+}
 
-	c := BaseClient{rpc: client, script: nil}
-	ass.NoError(c.SetValue("aaa", "bbb", 42))
+func TestDevice_GetValuesDescription(t *testing.T) {
+	ass := assert.New(t)
+
+	device := &Device{
+		Address: "address",
+	}
+
+	device.client = testRpcClient(func(method string, params []interface{}) (*rpc.Response, error) {
+		ass.Equal("getParamsetDescription", method)
+		ass.Equal([]interface{}{"address", "VALUES"}, params)
+		return &rpc.Response{
+			Params: []interface{}{
+				map[string]interface{}{
+					"aaa": map[string]interface{}{
+						"ID":         "aaa",
+						"DEFAULT":    123,
+						"TYPE":       "type",
+						"UNIT":       "unit",
+						"TAB_ORDER":  3,
+						"OPERATIONS": 0x01 + 0x02 + 0x04,
+						"FLAGS":      0x01 + 0x02 + 0x04 + 0x08 + 0x10,
+					},
+				},
+			},
+		}, nil
+	})
+	values, err := device.GetValuesDescription()
+	ass.NoError(err)
+	ass.Equal(map[string]ParameterDescription{
+		"aaa": {
+			ID:       "aaa",
+			Default:  123,
+			Type:     "type",
+			Unit:     "unit",
+			TabOrder: 3,
+
+			OperationRead:  true,
+			OperationWrite: true,
+			OperationEvent: true,
+
+			FlagVisible:   true,
+			FlagInternal:  true,
+			FlagTransform: true,
+			FlagService:   true,
+			FlagSticky:    true,
+		},
+	}, values)
+
 }

@@ -3,15 +3,16 @@ package rpc
 import (
 	"bytes"
 	"encoding/xml"
-	"fmt"
+	"errors"
+	"net"
 	"net/http"
-
-	"golang.org/x/net/html/charset"
+	"net/url"
 )
 
 // Client interface for XML RPC client
 type Client interface {
-	Call(method string, params []interface{}) (Response, error)
+	Call(method string, params []interface{}) (*Response, error)
+	LocalIP() (string, error)
 }
 
 // NewClient creates new client
@@ -21,38 +22,49 @@ func NewClient(url string) Client {
 
 // RPC client
 type client struct {
-	Url    string
+	URL    string
 	client *http.Client
 }
 
 // Call sends an RPC to server
-func (c *client) Call(method string, params []interface{}) (Response, error) {
+func (c *client) Call(method string, params []interface{}) (*Response, error) {
 	buf := new(bytes.Buffer)
 	err := xml.NewEncoder(buf).Encode(Request{
 		Method: method,
 		Params: params,
 	})
 	if err != nil {
-		return Response{}, err
+		return nil, err
 	}
 
-	resp, err := c.client.Post(c.Url, "text/xml", buf)
+	resp, err := c.client.Post(c.URL, "text/xml", buf)
 	if err != nil {
-		return Response{}, err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
-	var response Response
-	decoder := xml.NewDecoder(resp.Body)
-	decoder.CharsetReader = charset.NewReaderLabel
-	err = decoder.Decode(&response)
+	return ParseResponse(resp.Body)
+}
+
+func (c *client) LocalIP() (string, error) {
+	// get host from url
+	u, err := url.Parse(c.URL)
 	if err != nil {
-		return Response{}, err
+		return "", err
 	}
 
-	if response.Fault != nil {
-		return response, fmt.Errorf("RPC error %s", response.Fault.String)
+	// create TCP connection
+	conn, err := net.Dial("tcp", u.Host)
+	if err != nil {
+		return "", err
 	}
+	defer conn.Close()
 
-	return response, nil
+	// get local address of connection
+	addr := conn.LocalAddr()
+	tcpAddr, ok := addr.(*net.TCPAddr)
+	if !ok {
+		return "", errors.New("invalid")
+	}
+	return tcpAddr.IP.String(), nil
 }

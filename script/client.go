@@ -18,13 +18,13 @@ func NewClient(url string) Client {
 
 // RPC client
 type client struct {
-	Url    string
+	URL    string
 	client *http.Client
 }
 
 // Call sends an RPC to server
 func (c *client) Call(script string) (Result, error) {
-	resp, err := c.client.Post(c.Url+"a.exe", "", strings.NewReader(script))
+	resp, err := c.client.Post(c.URL+"a.exe", "", strings.NewReader(script))
 	if err != nil {
 		return nil, err
 	}
