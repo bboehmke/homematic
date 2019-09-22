@@ -31,11 +31,15 @@ func TestServer_StartStop(t *testing.T) {
 	server.Start()
 	server.Start()
 
-	time.Sleep(time.Millisecond * 100)
+	time.Sleep(time.Millisecond * 5)
+	ass.True(server.IsRunning())
 
 	// multiple starts should work
 	ass.NoError(server.Stop())
 	ass.NoError(server.Stop())
+
+	time.Sleep(time.Millisecond * 5)
+	ass.False(server.IsRunning())
 }
 
 func testRequest(request Request) (*http.Request, error) {

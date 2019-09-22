@@ -46,6 +46,13 @@ func NewServer(handler Handler) (*Server, error) {
 	return s, nil
 }
 
+// IsRunning returns true if server is running
+func (s *Server) IsRunning() bool {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+	return s.running
+}
+
 // Start server
 func (s *Server) Start() {
 	s.mutex.Lock()
