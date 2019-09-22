@@ -76,6 +76,13 @@ func TestRequest_encodeValue(t *testing.T) {
 			uint64(15),
 			float32(1.1),
 			float64(2.2),
+			[]interface{}{
+				111,
+				222,
+			},
+			map[string]interface{}{
+				"aaa": 111,
+			},
 		},
 	}
 
@@ -157,6 +164,32 @@ func TestRequest_encodeValue(t *testing.T) {
     <param>
       <value>
         <double>2.2</double>
+      </value>
+    </param>
+    <param>
+      <value>
+        <array>
+          <data>
+            <value>
+              <int>111</int>
+            </value>
+            <value>
+              <int>222</int>
+            </value>
+          </data>
+        </array>
+      </value>
+    </param>
+    <param>
+      <value>
+        <struct>
+          <member>
+            <name>aaa</name>
+            <value>
+              <int>111</int>
+            </value>
+          </member>
+        </struct>
       </value>
     </param>
   </params>

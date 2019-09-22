@@ -104,7 +104,9 @@ func encodeValue(value interface{}, e *xml.Encoder) error {
 
 	switch v := value.(type) {
 	case string:
-		err = e.Encode(v)
+		err = e.EncodeElement(v, xml.StartElement{
+			Name: xml.Name{Local: "string"},
+		})
 		if err != nil {
 			return err
 		}
@@ -131,6 +133,69 @@ func encodeValue(value interface{}, e *xml.Encoder) error {
 		err = e.EncodeElement(v, xml.StartElement{
 			Name: xml.Name{Local: "int"},
 		})
+		if err != nil {
+			return err
+		}
+	case []interface{}:
+		arrayName := xml.Name{Local: "array"}
+		err = e.EncodeToken(xml.StartElement{Name: arrayName})
+		if err != nil {
+			return err
+		}
+		dataName := xml.Name{Local: "data"}
+		err = e.EncodeToken(xml.StartElement{Name: dataName})
+		if err != nil {
+			return err
+		}
+
+		for _, entry := range v {
+			err = encodeValue(entry, e)
+			if err != nil {
+				return err
+			}
+		}
+
+		err = e.EncodeToken(xml.EndElement{Name: dataName})
+		if err != nil {
+			return err
+		}
+		err = e.EncodeToken(xml.EndElement{Name: arrayName})
+		if err != nil {
+			return err
+		}
+	case map[string]interface{}:
+		structName := xml.Name{Local: "struct"}
+		err = e.EncodeToken(xml.StartElement{Name: structName})
+		if err != nil {
+			return err
+		}
+
+		for key, entryValue := range v {
+			memberName := xml.Name{Local: "member"}
+			err = e.EncodeToken(xml.StartElement{Name: memberName})
+			if err != nil {
+				return err
+			}
+
+			err = e.EncodeElement(key, xml.StartElement{
+				Name: xml.Name{Local: "name"},
+			})
+			if err != nil {
+				return err
+			}
+
+			err = encodeValue(entryValue, e)
+			if err != nil {
+				return err
+			}
+
+			err = e.EncodeToken(xml.EndElement{Name: memberName})
+			if err != nil {
+				return err
+			}
+		}
+
+		err = e.EncodeToken(xml.EndElement{Name: structName})
 		if err != nil {
 			return err
 		}
