@@ -9,6 +9,7 @@ import (
 
 	"github.com/beevik/etree"
 	"github.com/spf13/cast"
+	"golang.org/x/net/html/charset"
 )
 
 // Fault information of response
@@ -83,6 +84,7 @@ func (r *Response) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 // ParseResponse from XML
 func ParseResponse(reader io.Reader) (*Response, error) {
 	doc := etree.NewDocument()
+	doc.ReadSettings.CharsetReader = charset.NewReaderLabel
 	_, err := doc.ReadFrom(reader)
 	if err != nil {
 		return nil, err

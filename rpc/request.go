@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/beevik/etree"
+	"golang.org/x/net/html/charset"
 )
 
 // Request for XML RPCs
@@ -65,6 +66,7 @@ func (r Request) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 // ParseRequest from XML
 func ParseRequest(reader io.Reader) (*Request, error) {
 	doc := etree.NewDocument()
+	doc.ReadSettings.CharsetReader = charset.NewReaderLabel
 	_, err := doc.ReadFrom(reader)
 	if err != nil {
 		return nil, err
