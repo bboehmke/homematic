@@ -124,17 +124,11 @@ func (c *CCU) Start() error {
 			return err
 		}
 
-		response, err := client.Call("init", []interface{}{
+		// ignore result -> handle all clients
+		_, _ = client.Call("init", []interface{}{
 			fmt.Sprintf("http://%s:%d", ip, c.rpcServer.Port()),
 			id,
 		})
-		if err != nil {
-			return err
-		}
-
-		if response.Fault != nil {
-			return errors.New(response.Fault.String)
-		}
 		c.lastEvent[id] = time.Now()
 	}
 	return nil
@@ -151,17 +145,10 @@ func (c *CCU) Stop() error {
 			return err
 		}
 
-		response, err := client.Call("init", []interface{}{
+		_, _ = client.Call("init", []interface{}{
 			fmt.Sprintf("http://%s:%d", ip, c.rpcServer.Port()),
 			"",
 		})
-		if err != nil {
-			return err
-		}
-
-		if response.Fault != nil {
-			return errors.New(response.Fault.String)
-		}
 	}
 	return c.rpcServer.Stop()
 }
