@@ -56,12 +56,12 @@ func (c *CCU) handleEvents(method string, params []interface{}) ([]interface{}, 
 		}
 	}
 
-	c.mutex.RLock()
+	c.mutex.Lock()
 	c.lastEvent[cast.ToString(params[0])] = time.Now()
 
 	// if device is known trigger value change
 	device, ok := c.devices[cast.ToString(params[1])]
-	c.mutex.RUnlock()
+	c.mutex.Unlock()
 	if ok {
 		device.valueChanged(cast.ToString(params[2]), params[3])
 
