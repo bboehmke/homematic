@@ -11,10 +11,10 @@ import (
 var devNameScript = `string s_device;
 string s_channel;
 string output = "";
-foreach(s_device, dom.GetObject(ID_DEVICES).EnumUsedIDs()) {
+foreach(s_device, dom.GetObject(ID_DEVICES).EnumIDs()) {
 	var o_device = dom.GetObject(s_device);
 	output = output # o_device.Address() # "=" # o_device.Name() # "\n" ;
-	foreach(s_channel, o_device.Channels().EnumUsedIDs()) {
+	foreach(s_channel, o_device.Channels().EnumIDs()) {
 		var o_channel = dom.GetObject(s_channel);
 		output = output # o_channel.Address() # "=" # o_channel.Name() # "\n" ;
 	}
@@ -22,12 +22,17 @@ foreach(s_device, dom.GetObject(ID_DEVICES).EnumUsedIDs()) {
 
 // loadDevice from received data
 func loadDevice(data map[string]interface{}) *Device {
+	flags := cast.ToInt32(data["FLAGS"])
 	return &Device{
 		Type:      cast.ToString(data["TYPE"]),
 		Address:   cast.ToString(data["ADDRESS"]),
 		Children:  cast.ToStringSlice(data["CHILDREN"]),
 		Parent:    cast.ToString(data["PARENT"]),
 		ParamSets: cast.ToStringSlice(data["PARAMSETS"]),
+
+		FlagVisible:    (flags & 0x01) != 0,
+		FlagInternal:   (flags & 0x02) != 0,
+		FlagDontdelete: (flags & 0x04) != 0,
 	}
 }
 
@@ -44,6 +49,10 @@ type Device struct {
 	Children  []string
 	Parent    string
 	ParamSets []string
+
+	FlagVisible    bool
+	FlagInternal   bool
+	FlagDontdelete bool
 
 	onValueChange func(key string, value interface{})
 }
