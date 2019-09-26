@@ -93,6 +93,14 @@ func (d *Device) HasValues() bool {
 	return false
 }
 
+// GetName updates device name
+func (d *Device) GetName() string {
+	d.mutex.RLock()
+	defer d.mutex.RUnlock()
+
+	return d.Name
+}
+
 // GetValues of a device
 func (d *Device) GetValues() (map[string]interface{}, error) {
 	response, err := d.client.Call(
