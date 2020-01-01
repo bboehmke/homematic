@@ -4,6 +4,8 @@ import (
 	"encoding/xml"
 	"net/http"
 	"strings"
+
+	"golang.org/x/text/encoding/charmap"
 )
 
 // Client interface for remote script client
@@ -30,7 +32,10 @@ func (c *client) Call(script string) (Result, error) {
 	}
 	defer resp.Body.Close()
 
+	// no processing instruction in response
+	// -> charset.NewReaderLabel not working
+	// -> manually decode iso-8859-1
 	var data Result
-	decoder := xml.NewDecoder(resp.Body)
+	decoder := xml.NewDecoder(charmap.Windows1252.NewDecoder().Reader(resp.Body))
 	return data, decoder.Decode(&data)
 }
