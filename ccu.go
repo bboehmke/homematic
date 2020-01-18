@@ -14,11 +14,16 @@ import (
 
 // NewCCU creates a new connection to a CCU
 func NewCCU(address string) (*CCU, error) {
+	return NewCCUCustom(address, "go")
+}
+
+// NewCCUCustom creates a new connection to a CCU with custom id
+func NewCCUCustom(address, id string) (*CCU, error) {
 	ccu := &CCU{
 		rpcClients: map[string]rpc.Client{
-			"wired": rpc.NewClient(fmt.Sprintf("http://%s:2000/", address)),
-			"rf":    rpc.NewClient(fmt.Sprintf("http://%s:2001/", address)),
-			"hmIP":  rpc.NewClient(fmt.Sprintf("http://%s:2010/", address)),
+			fmt.Sprintf("%s-wired", id): rpc.NewClient(fmt.Sprintf("http://%s:2000/", address)),
+			fmt.Sprintf("%s-rf", id):    rpc.NewClient(fmt.Sprintf("http://%s:2001/", address)),
+			fmt.Sprintf("%s-hmip", id):  rpc.NewClient(fmt.Sprintf("http://%s:2010/", address)),
 		},
 		scriptClient: script.NewClient(fmt.Sprintf("http://%s:8181/", address)),
 		devices:      make(map[string]*Device),
@@ -27,7 +32,7 @@ func NewCCU(address string) (*CCU, error) {
 
 	// prepare RPC server
 	var err error
-	ccu.rpcServer, err = rpc.NewServer(ccu.handleEvents)
+	ccu.rpcServer, err = rpc.NewServer(ccu.handleCallback)
 	return ccu, err
 }
 
@@ -42,36 +47,6 @@ type CCU struct {
 	devices    map[string]*Device
 	lastUpdate time.Time
 	lastEvent  map[string]time.Time
-}
-
-// handle received events
-func (c *CCU) handleEvents(method string, params []interface{}) ([]interface{}, *rpc.Fault) {
-	if method != "event" {
-		return nil, nil
-	}
-	if len(params) < 4 {
-		return nil, &rpc.Fault{
-			Code:   -1,
-			String: "invalid event call",
-		}
-	}
-
-	c.mutex.Lock()
-	c.lastEvent[cast.ToString(params[0])] = time.Now()
-
-	// if device is known trigger value change
-	device, ok := c.devices[cast.ToString(params[1])]
-	c.mutex.Unlock()
-	if ok {
-		device.valueChanged(cast.ToString(params[2]), params[3])
-
-		// check if event handling is working
-		c.checkEventHandling()
-	} else {
-		// if devices does not exist update device list
-		c.UpdateDevices(true)
-	}
-	return nil, nil
 }
 
 // checkEventHandling for activity and re init if no events since long time

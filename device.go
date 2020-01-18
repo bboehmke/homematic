@@ -29,6 +29,7 @@ func loadDevice(data map[string]interface{}) *Device {
 		Children:  cast.ToStringSlice(data["CHILDREN"]),
 		Parent:    cast.ToString(data["PARENT"]),
 		ParamSets: cast.ToStringSlice(data["PARAMSETS"]),
+		Version:   cast.ToInt(data["VERSION"]),
 
 		FlagVisible:    (flags & 0x01) != 0,
 		FlagInternal:   (flags & 0x02) != 0,
@@ -45,6 +46,7 @@ type Device struct {
 	Name    string
 	Type    string
 	Address string
+	Version int
 
 	Children  []string
 	Parent    string

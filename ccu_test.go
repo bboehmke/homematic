@@ -27,37 +27,6 @@ func (c testScriptClient) Call(script string) (script.Result, error) {
 	return c(script)
 }
 
-func TestCCU_handleEvents(t *testing.T) {
-	ass := assert.New(t)
-
-	ccu, err := NewCCU("127.0.0.1")
-	ass.NoError(err)
-
-	resp, fault := ccu.handleEvents("unknown", nil)
-	ass.Nil(resp)
-	ass.Nil(fault)
-
-	resp, fault = ccu.handleEvents("event", nil)
-	ass.Nil(resp)
-	ass.Equal(&rpc.Fault{
-		Code:   -1,
-		String: "invalid event call",
-	}, fault)
-
-	resp, fault = ccu.handleEvents("event", []interface{}{
-		"id", "address", "name", "value",
-	})
-	ass.Nil(resp)
-	ass.Nil(fault)
-
-	ccu.devices["address"] = new(Device)
-	resp, fault = ccu.handleEvents("event", []interface{}{
-		"id", "address", "name", "value",
-	})
-	ass.Nil(resp)
-	ass.Nil(fault)
-}
-
 func TestCCU_checkEventHandling(t *testing.T) {
 	ass := assert.New(t)
 

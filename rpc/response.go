@@ -78,6 +78,27 @@ func (r *Response) MarshalXML(e *xml.Encoder, start xml.StartElement) error {
 		}
 	}
 
+	if r.Fault != nil {
+		fault := xml.Name{Local: "fault"}
+		err = e.EncodeToken(xml.StartElement{Name: fault})
+		if err != nil {
+			return err
+		}
+
+		err = encodeValue(map[string]interface{}{
+			"faultCode":   r.Fault.Code,
+			"faultString": r.Fault.String,
+		}, e)
+		if err != nil {
+			return err
+		}
+
+		err = e.EncodeToken(xml.EndElement{Name: fault})
+		if err != nil {
+			return err
+		}
+	}
+
 	return e.EncodeToken(xml.EndElement{Name: methodResponse})
 }
 
