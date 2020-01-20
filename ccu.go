@@ -100,7 +100,7 @@ func (c *CCU) Start() error {
 		}
 
 		// ignore result -> handle all clients
-		_, _ = client.Call("init", []interface{}{
+		go client.Call("init", []interface{}{
 			fmt.Sprintf("http://%s:%d", ip, c.rpcServer.Port()),
 			id,
 		})
