@@ -28,7 +28,7 @@ func NewCCUCustom(address, id string) (*CCU, error) {
 		scriptClient: script.NewClient(fmt.Sprintf("http://%s:8181/", address)),
 		devices:      make(map[string]*Device),
 	}
-	ccu.lastEvent = make(map[string]time.Time, len(ccu.rpcClients))
+	ccu.lastClientEvent = make(map[string]time.Time, len(ccu.rpcClients))
 
 	// prepare RPC server
 	var err error
@@ -38,21 +38,22 @@ func NewCCUCustom(address, id string) (*CCU, error) {
 
 // CCU represents a connection to a Homematic CCU
 type CCU struct {
-	rpcClients map[string]rpc.Client
-	rpcServer  *rpc.Server
+	rpcClients      map[string]rpc.Client
+	rpcServer       *rpc.Server
+	lastClientEvent map[string]time.Time
 
 	scriptClient script.Client
+	clientMutex  sync.RWMutex
 
-	mutex      sync.RWMutex
-	devices    map[string]*Device
-	lastUpdate time.Time
-	lastEvent  map[string]time.Time
+	devices     map[string]*Device
+	lastUpdate  time.Time
+	deviceMutex sync.RWMutex
 }
 
 // checkEventHandling for activity and re init if no events since long time
 func (c *CCU) checkEventHandling() error {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
+	c.clientMutex.Lock()
+	defer c.clientMutex.Unlock()
 
 	// check only if server is running
 	if !c.rpcServer.IsRunning() {
@@ -61,7 +62,7 @@ func (c *CCU) checkEventHandling() error {
 
 	for id, client := range c.rpcClients {
 		// only re init if no event since 10 minutes
-		if time.Since(c.lastEvent[id]) < time.Minute*10 {
+		if time.Since(c.lastClientEvent[id]) < time.Minute*10 {
 			continue
 		}
 
@@ -81,15 +82,15 @@ func (c *CCU) checkEventHandling() error {
 		if response.Fault != nil {
 			return errors.New(response.Fault.String)
 		}
-		c.lastEvent[id] = time.Now()
+		c.lastClientEvent[id] = time.Now()
 	}
 	return nil
 }
 
 // Start event handling
 func (c *CCU) Start() error {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	c.clientMutex.Lock()
+	defer c.clientMutex.Unlock()
 
 	c.rpcServer.Start()
 
@@ -100,19 +101,19 @@ func (c *CCU) Start() error {
 		}
 
 		// ignore result -> handle all clients
-		go client.Call("init", []interface{}{
+		_, _ = client.Call("init", []interface{}{
 			fmt.Sprintf("http://%s:%d", ip, c.rpcServer.Port()),
 			id,
 		})
-		c.lastEvent[id] = time.Now()
+		c.lastClientEvent[id] = time.Now()
 	}
 	return nil
 }
 
 // Stop event handling
 func (c *CCU) Stop() error {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	c.clientMutex.Lock()
+	defer c.clientMutex.Unlock()
 
 	for _, client := range c.rpcClients {
 		ip, err := client.LocalIP()
@@ -135,8 +136,8 @@ func (c *CCU) GetDevices() (map[string]*Device, error) {
 		return nil, err
 	}
 
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
+	c.deviceMutex.RLock()
+	defer c.deviceMutex.RUnlock()
 
 	return c.devices, nil
 }
@@ -148,8 +149,8 @@ func (c *CCU) UpdateDevices(force bool) error {
 		return err
 	}
 
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	c.deviceMutex.Lock()
+	defer c.deviceMutex.Unlock()
 
 	// update only every 10 minutes or if force is set
 	if !force && time.Since(c.lastUpdate) < time.Minute*10 {

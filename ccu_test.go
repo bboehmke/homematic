@@ -47,7 +47,7 @@ func TestCCU_checkEventHandling(t *testing.T) {
 
 	ass.NoError(ccu.Start())
 
-	ccu.lastEvent = make(map[string]time.Time)
+	ccu.lastClientEvent = make(map[string]time.Time)
 
 	ass.NoError(ccu.checkEventHandling())
 

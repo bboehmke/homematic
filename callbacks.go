@@ -30,12 +30,12 @@ func (c *CCU) callbackEvent(params []interface{}) ([]interface{}, *rpc.Fault) {
 		}
 	}
 
-	c.mutex.Lock()
-	c.lastEvent[cast.ToString(params[0])] = time.Now()
+	c.deviceMutex.Lock()
+	c.lastClientEvent[cast.ToString(params[0])] = time.Now()
 
 	// if device is known trigger value change
 	device, ok := c.devices[cast.ToString(params[1])]
-	c.mutex.Unlock()
+	c.deviceMutex.Unlock()
 	if ok {
 		device.valueChanged(cast.ToString(params[2]), params[3])
 
@@ -50,8 +50,8 @@ func (c *CCU) callbackEvent(params []interface{}) ([]interface{}, *rpc.Fault) {
 
 // handle listDevices callback
 func (c *CCU) callbackListDevices() ([]interface{}, *rpc.Fault) {
-	c.mutex.RLock()
-	defer c.mutex.RUnlock()
+	c.deviceMutex.RLock()
+	defer c.deviceMutex.RUnlock()
 
 	data := make([]interface{}, 0, len(c.devices))
 	for _, device := range c.devices {
@@ -74,8 +74,8 @@ func (c *CCU) callbackNewDevices(params []interface{}) ([]interface{}, *rpc.Faul
 			String: "invalid newDevices call",
 		}
 	}
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	c.deviceMutex.Lock()
+	defer c.deviceMutex.Unlock()
 
 	// check if client is known
 	client, ok := c.rpcClients[cast.ToString(params[0])]
