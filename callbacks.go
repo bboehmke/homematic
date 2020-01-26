@@ -74,12 +74,12 @@ func (c *CCU) callbackNewDevices(params []interface{}) ([]interface{}, *rpc.Faul
 			String: "invalid newDevices call",
 		}
 	}
-	c.deviceMutex.Lock()
-	defer c.deviceMutex.Unlock()
 
 	// check if client is known
+	c.clientMutex.Lock()
 	client, ok := c.rpcClients[cast.ToString(params[0])]
 	if !ok {
+		c.clientMutex.Unlock()
 		return nil, &rpc.Fault{
 			Code:   -1,
 			String: "invalid interface id",
@@ -89,11 +89,15 @@ func (c *CCU) callbackNewDevices(params []interface{}) ([]interface{}, *rpc.Faul
 	// get device names from logic layer
 	scriptData, err := c.scriptClient.Call(devNameScript)
 	if err != nil {
+		c.clientMutex.Unlock()
 		// failed to get device names
 		return []interface{}{true}, nil
 	}
+	c.clientMutex.Unlock()
 	deviceNames := scriptData.GetMap("output")
 
+	c.deviceMutex.Lock()
+	defer c.deviceMutex.Unlock()
 	// load each device
 	for _, data := range cast.ToSlice(params[1]) {
 		device := loadDevice(cast.ToStringMap(data))
