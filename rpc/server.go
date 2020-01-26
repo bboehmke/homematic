@@ -3,7 +3,6 @@ package rpc
 import (
 	"context"
 	"encoding/xml"
-	"log"
 	"net"
 	"net/http"
 	"sync"
@@ -177,9 +176,5 @@ func (s *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
 			rpcRequest.Method, rpcRequest.Params)
 	}
 
-	err = xml.NewEncoder(writer).Encode(&response)
-	if err != nil {
-		// TODO better logging
-		log.Print(err)
-	}
+	_ = xml.NewEncoder(writer).Encode(&response)
 }
