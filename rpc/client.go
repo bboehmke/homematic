@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 // Client interface for XML RPC client
@@ -17,7 +18,9 @@ type Client interface {
 
 // NewClient creates new client
 func NewClient(url string) Client {
-	return &client{url, http.DefaultClient}
+	return &client{url, &http.Client{
+		Timeout: time.Second * 5,
+	}}
 }
 
 // RPC client

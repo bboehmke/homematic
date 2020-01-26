@@ -4,6 +4,7 @@ import (
 	"encoding/xml"
 	"net/http"
 	"strings"
+	"time"
 
 	"golang.org/x/text/encoding/charmap"
 )
@@ -15,7 +16,9 @@ type Client interface {
 
 // NewClient creates new client
 func NewClient(url string) Client {
-	return &client{url, http.DefaultClient}
+	return &client{url, &http.Client{
+		Timeout: time.Second * 5,
+	}}
 }
 
 // RPC client
