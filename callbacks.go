@@ -30,10 +30,12 @@ func (c *CCU) callbackEvent(params []interface{}) ([]interface{}, *rpc.Fault) {
 		}
 	}
 
-	c.deviceMutex.Lock()
+	c.clientMutex.Lock()
 	c.lastClientEvent[cast.ToString(params[0])] = time.Now()
+	c.clientMutex.Unlock()
 
 	// if device is known trigger value change
+	c.deviceMutex.Lock()
 	device, ok := c.devices[cast.ToString(params[1])]
 	c.deviceMutex.Unlock()
 	if ok {
