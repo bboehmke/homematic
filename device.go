@@ -155,11 +155,12 @@ func (d *Device) GetValuesDescription() (map[string]ParameterDescription, error)
 
 // ParameterDescription contains information about a parameter
 type ParameterDescription struct {
-	ID       string
-	Default  interface{}
-	Type     string
-	Unit     string
-	TabOrder int
+	ID        string
+	Default   interface{}
+	Type      string
+	Unit      string
+	TabOrder  int
+	ValueList []string
 
 	OperationRead  bool
 	OperationWrite bool
@@ -178,11 +179,12 @@ func loadParameterDescription(data interface{}) ParameterDescription {
 	operations := cast.ToInt32(dataMap["OPERATIONS"])
 	flags := cast.ToInt32(dataMap["FLAGS"])
 	return ParameterDescription{
-		ID:       cast.ToString(dataMap["ID"]),
-		Default:  dataMap["DEFAULT"],
-		Type:     cast.ToString(dataMap["TYPE"]),
-		Unit:     cast.ToString(dataMap["UNIT"]),
-		TabOrder: cast.ToInt(dataMap["TAB_ORDER"]),
+		ID:        cast.ToString(dataMap["ID"]),
+		Default:   dataMap["DEFAULT"],
+		Type:      cast.ToString(dataMap["TYPE"]),
+		Unit:      cast.ToString(dataMap["UNIT"]),
+		TabOrder:  cast.ToInt(dataMap["TAB_ORDER"]),
+		ValueList: cast.ToStringSlice(dataMap["VALUE_LIST"]),
 
 		OperationRead:  (operations & 0x01) != 0,
 		OperationWrite: (operations & 0x02) != 0,

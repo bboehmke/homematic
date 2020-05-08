@@ -144,6 +144,9 @@ func TestDevice_GetValuesDescription(t *testing.T) {
 						"TAB_ORDER":  3,
 						"OPERATIONS": 0x01 + 0x02 + 0x04,
 						"FLAGS":      0x01 + 0x02 + 0x04 + 0x08 + 0x10,
+						"VALUE_LIST": []interface{}{
+							"aaa", "bbb",
+						},
 					},
 				},
 			},
@@ -158,6 +161,9 @@ func TestDevice_GetValuesDescription(t *testing.T) {
 			Type:     "type",
 			Unit:     "unit",
 			TabOrder: 3,
+			ValueList: []string{
+				"aaa", "bbb",
+			},
 
 			OperationRead:  true,
 			OperationWrite: true,
